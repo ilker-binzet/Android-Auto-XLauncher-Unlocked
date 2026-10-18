@@ -1,13 +1,15 @@
 package com.google.android.projection.gearhead.xunlocked
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.WindowCompat
-import androidx.navigation.findNavController
+import androidx.core.net.toUri
+import androidx.navigation.NavController
+import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.navigateUp
 import androidx.navigation.ui.setupActionBarWithNavController
@@ -19,21 +21,21 @@ class MainActivity : AppCompatActivity() {
     private val repoUrl: String = "https://github.com/Rikj000/Android-Auto-XLauncher-Unlocked"
     private lateinit var appBarConfiguration: AppBarConfiguration
     private lateinit var binding: ActivityMainBinding
+    private lateinit var navController: NavController
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
-
         setContentView(binding.root)
-
         setSupportActionBar(binding.toolbar)
 
-        val navController = findNavController(R.id.nav_host_fragment_content_main)
+        val navHostFragment = supportFragmentManager
+            .findFragmentById(R.id.nav_host_fragment_content_main) as NavHostFragment
+        navController = navHostFragment.navController
         appBarConfiguration = AppBarConfiguration(navController.graph)
         setupActionBarWithNavController(navController, appBarConfiguration)
-        return
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -43,27 +45,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-
-        val browserIntent = Intent(Intent.ACTION_VIEW)
-
-        when (item.itemId) {
-            R.id.action_source_code -> browserIntent.data = Uri.parse(repoUrl)
-            R.id.action_updates -> browserIntent.data = Uri.parse("$repoUrl/releases")
-            R.id.action_magisk ->
-                browserIntent.data = Uri.parse("https://topjohnwu.github.io/Magisk/")
-            R.id.action_lsposed -> browserIntent.data = Uri.parse("https://lsposed.org/")
+        val url = when (item.itemId) {
+            R.id.action_source_code -> repoUrl
+            R.id.action_updates -> "$repoUrl/releases"
+            R.id.action_magisk -> "https://topjohnwu.github.io/Magisk/"
+            R.id.action_lsposed -> "https://github.com/LSPosed/LSPosed/releases"
+            else -> return super.onOptionsItemSelected(item)
         }
 
-        startActivity(browserIntent)
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+        } catch (_: ActivityNotFoundException) {
+            // No browser installed, nothing to open the link with
+        }
         return true
     }
 
-    override fun onSupportNavigateUp(): Boolean {
-        val navController = findNavController(R.id.nav_host_fragment_content_main)
-        return navController.navigateUp(appBarConfiguration)
-                || super.onSupportNavigateUp()
-    }
+    override fun onSupportNavigateUp(): Boolean =
+        navController.navigateUp(appBarConfiguration) || super.onSupportNavigateUp()
 }

@@ -9,6 +9,21 @@
     <string name="magisk">Magisk</string>
     <string name="lsposed">LSPosed</string>
 
+    <!-- Xposed module description, shown by the Xposed framework -->
+    <string name="xposed_description">Unlock more 3th party Android Auto apps! Module by Rikj000</string>
+
+    <!-- Xposed module status -->
+    <string name="module_status">Xposed Module</string>
+    <string name="module_status_inactive">Not active.\nEnable the module in LSPosed (v2.1.0+, libxposed API 102) and reboot.</string>
+    <string name="module_status_active">Active in Android Auto ✔️\n%1$s %2$s (API %3$d)</string>
+    <string name="module_status_no_scope">Enabled in %1$s %2$s,\nbut Android Auto is not in the module scope.</string>
+    <string name="module_request_scope">Add Android Auto to scope</string>
+    <string name="module_scope_failed">Scope request failed %1$s</string>
+
+    <!-- Launch errors -->
+    <string name="launch_failed">Could not launch this Android Auto screen, is Android Auto installed?</string>
+    <string name="launch_failed_root">Could not launch this Android Auto screen, root denied or screen not available in your Android Auto version.</string>
+
     <!-- Main launch options -->
     <string name="material3">Material3</string>
     <string name="material3_description">Launch the Android Auto settings,\nwith the hidden/experimental Material3 style!\nRequires root to access!</string>

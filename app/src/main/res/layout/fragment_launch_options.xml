@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.core.widget.NestedScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/scroll_view_launch_options"
+    android:clipToPadding="false"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -12,6 +14,49 @@
         android:layout_height="match_parent"
         android:padding="16dp" >
 
+        <!-- Xposed Module Status -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_module_status"
+            style="?attr/materialCardViewFilledStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="15dp"
+            android:layout_marginBottom="10dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:id="@+id/textview_module_status_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/module_status"
+                    android:textSize="18sp"
+                    android:layout_marginBottom="5sp" />
+
+                <TextView
+                    android:id="@+id/textview_module_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/module_status_inactive" />
+
+                <Button
+                    android:id="@+id/button_request_scope"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text="@string/module_request_scope"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- Settings Launcher Instructions -->
         <LinearLayout
             android:id="@+id/linear_layout_launcher_instructions"
@@ -19,12 +64,12 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:layout_marginLeft="15dp"
-            android:layout_marginTop="0dp"
+            android:layout_marginTop="10dp"
             android:layout_marginRight="15dp"
             android:layout_marginBottom="10dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            tools:ignore="MissingConstraints">
+            app:layout_constraintTop_toBottomOf="@id/card_module_status">
 
             <TextView
                 android:id="@+id/textview_material3_title"
