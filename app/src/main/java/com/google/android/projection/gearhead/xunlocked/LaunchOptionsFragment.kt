@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -72,8 +73,8 @@ class LaunchOptionsFragment : Fragment() {
 
         // Setup all the launcher options
         binding.buttonClassic.setOnClickListener { launchClassicSettings() }
-        binding.buttonMaterial3.setOnClickListener { launchSuAndroidAutoActivity(MATERIAL3_SETTINGS) }
         for ((button, activityName) in mapOf(
+            binding.buttonMaterial3 to MATERIAL3_SETTINGS,
             binding.buttonInteractiveTroubleshooter to INTERACTIVE_TROUBLESHOOTER,
             binding.buttonTroubleshooter to TROUBLESHOOTER,
             binding.buttonDeveloperSettings to DEVELOPER_SETTINGS,
@@ -85,6 +86,8 @@ class LaunchOptionsFragment : Fragment() {
             binding.buttonAppLauncher to APP_LAUNCHER,
         )) {
             button.setOnClickListener { launchSuAndroidAutoActivity(activityName) }
+            // Android Auto removes hidden screens between releases, e.g. 18.0 dropped the Interactive Troubleshooter
+            button.isVisible = isAndroidAutoActivityAvailable(activityName)
         }
 
         // Setup the Xposed module status card
@@ -182,6 +185,26 @@ class LaunchOptionsFragment : Fragment() {
     // endregion Launcher Options
 
     //region Helpers
+
+    /** Whether the installed Android Auto version still declares [activityName], `true` when unknown */
+    private fun isAndroidAutoActivityAvailable(activityName: String): Boolean {
+        val packageManager = requireContext().packageManager
+        return try {
+            packageManager.getActivityInfo(
+                ComponentName(AA_PACKAGE, activityName), PackageManager.MATCH_DISABLED_COMPONENTS)
+            true
+        } catch (_: PackageManager.NameNotFoundException) {
+            // Keep the option when Android Auto itself is missing, the launch reports the error
+            !isAndroidAutoInstalled(packageManager)
+        }
+    }
+
+    private fun isAndroidAutoInstalled(packageManager: PackageManager): Boolean = try {
+        packageManager.getPackageInfo(AA_PACKAGE, 0)
+        true
+    } catch (_: PackageManager.NameNotFoundException) {
+        false
+    }
 
     /** Toggle the use default launch option setting */
     private fun toggleUseDefault() {

@@ -17,6 +17,12 @@ import java.lang.reflect.Method
  * Makes the "installed from Google Play" checks inside Android Auto always pass,
  * so sideloaded 3rd party Android Auto apps are accepted.
  * Hook credits: Fermata by @AndreyPavlenko.
+ *
+ * Verified against Android Auto 18.0.664204 (see docs/reverse-engineering-android-auto.md):
+ * `CarProjectionValidator#isPackageAllowed3p` reads [InstallSourceInfo.getInitiatingPackageName]
+ * (falling back to `getInstallingPackageName` for the system package installer) and allows the app
+ * when that installer is `com.android.vending` and the Play Store is Google signed,
+ * without waiting for the remote Play Store verification.
  */
 class AAXUnlock : XposedModule() {
 
