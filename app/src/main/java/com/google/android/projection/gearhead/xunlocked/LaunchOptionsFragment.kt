@@ -2,6 +2,7 @@ package com.google.android.projection.gearhead.xunlocked
 
 //region Imports
 
+import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -11,8 +12,19 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
+import androidx.core.content.edit
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
+import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import com.google.android.projection.gearhead.xunlocked.RootShell.AA_PACKAGE
 import com.google.android.projection.gearhead.xunlocked.databinding.FragmentLaunchOptionsBinding
+import kotlinx.coroutines.launch
 
 //endregion Imports
 
@@ -25,19 +37,13 @@ class LaunchOptionsFragment : Fragment() {
     private var _binding: FragmentLaunchOptionsBinding? = null
     private val binding get() = _binding!!
 
-    // Initialize static helpers
-    private val logTag: String = "AndroidAuto-LauncherUnlocked"
-    private val aaPackageName: String = "com.google.android.projection.gearhead"
-    private val aaMaterial3Settings: String = ".companion.settings.Material3SettingsActivity"
-
     // Initialize settings
-    private var defaultActivityName: String? = ""
+    private var defaultActivityName: String = ""
     private var useDefault: Boolean = false
     private lateinit var settings: SharedPreferences
 
-    @Suppress("RedundantNullableReturnType")
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
 
         _binding = FragmentLaunchOptionsBinding.inflate(inflater, container, false)
         return binding.root
@@ -47,30 +53,53 @@ class LaunchOptionsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        // Keep the content clear of the navigation bar when drawing edge-to-edge
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { root, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            root.updatePadding(left = bars.left, right = bars.right, bottom = bars.bottom)
+            insets
+        }
+
         // Load the stored settings if existing
-        settings = this.requireActivity().getSharedPreferences("pref", Context.MODE_PRIVATE)
+        settings = requireActivity().getSharedPreferences("pref", Context.MODE_PRIVATE)
         useDefault = settings.getBoolean("use_default", false)
-        defaultActivityName = settings.getString("default_activity_name", "")
+        defaultActivityName = settings.getString("default_activity_name", "").orEmpty()
 
         // Setup the default checkbox
         binding.checkboxDefault.isChecked = useDefault
         binding.checkboxDefault.setOnClickListener { toggleUseDefault() }
 
         // Setup all the launcher options
-        binding.buttonClassic.setOnClickListener { launchAndroidAutoSettings(true) }
-        binding.buttonMaterial3.setOnClickListener { launchAndroidAutoSettings() }
-        binding.buttonInteractiveTroubleshooter.setOnClickListener { launchInteractiveTroubleshooter() }
-        binding.buttonTroubleshooter.setOnClickListener { launchTroubleshooter() }
-        binding.buttonDeveloperSettings.setOnClickListener { launchDeveloperSettings() }
-        binding.buttonEngineerSettings.setOnClickListener { launchEngineerSettings() }
-        binding.buttonAppQualityTester.setOnClickListener { launchAppQualityTester() }
-        binding.buttonFeedbackReports.setOnClickListener { launchFeedbackReports() }
-        binding.buttonPrimesEvents.setOnClickListener { launchPrimesEvents() }
-        binding.buttonAssistantShortcut.setOnClickListener { launchAssistantShortcuts() }
-        binding.buttonAppLauncher.setOnClickListener { launchAppLauncher() }
+        binding.buttonClassic.setOnClickListener { launchClassicSettings() }
+        binding.buttonMaterial3.setOnClickListener { launchSuAndroidAutoActivity(MATERIAL3_SETTINGS) }
+        for ((button, activityName) in mapOf(
+            binding.buttonInteractiveTroubleshooter to INTERACTIVE_TROUBLESHOOTER,
+            binding.buttonTroubleshooter to TROUBLESHOOTER,
+            binding.buttonDeveloperSettings to DEVELOPER_SETTINGS,
+            binding.buttonEngineerSettings to ENGINEER_SETTINGS,
+            binding.buttonAppQualityTester to APP_QUALITY_TESTER,
+            binding.buttonFeedbackReports to FEEDBACK_REPORTS,
+            binding.buttonPrimesEvents to PRIMES_EVENTS,
+            binding.buttonAssistantShortcut to ASSISTANT_SHORTCUT,
+            binding.buttonAppLauncher to APP_LAUNCHER,
+        )) {
+            button.setOnClickListener { launchSuAndroidAutoActivity(activityName) }
+        }
 
-        // Launch the default launcher option if used
-        if (useDefault && defaultActivityName != "") { launchDefault() }
+        // Setup the Xposed module status card
+        binding.buttonRequestScope.setOnClickListener { requestAndroidAutoScope() }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                XposedStatus.refresh()
+                XposedStatus.info.collect { updateModuleStatus(it) }
+            }
+        }
+
+        // Launch the default launcher option if used, but not again on configuration changes
+        if (savedInstanceState == null && useDefault && defaultActivityName.isNotEmpty()) {
+            launchDefault()
+        }
     }
 
     override fun onDestroyView() {
@@ -80,108 +109,74 @@ class LaunchOptionsFragment : Fragment() {
 
     //endregion Initialization
 
+    //region Module status
+
+    /** Show whether the libxposed module is active and hooked into Android Auto */
+    private fun updateModuleStatus(info: XposedStatus.Info?) {
+        val binding = _binding ?: return
+        binding.textviewModuleStatus.text = when {
+            info == null -> getString(R.string.module_status_inactive)
+            info.androidAutoInScope -> getString(
+                R.string.module_status_active,
+                info.frameworkName, info.frameworkVersion, info.apiVersion)
+            else -> getString(R.string.module_status_no_scope, info.frameworkName, info.frameworkVersion)
+        }
+        binding.buttonRequestScope.isVisible = info != null && !info.androidAutoInScope
+    }
+
+    /** Ask the Xposed framework to add Android Auto to the module scope */
+    private fun requestAndroidAutoScope() {
+        XposedStatus.requestAndroidAutoScope { approved, message ->
+            // Scope callbacks arrive on a binder thread
+            activity?.runOnUiThread {
+                if (!approved && isAdded) {
+                    toast(getString(R.string.module_scope_failed, message.orEmpty()))
+                }
+            }
+        }
+    }
+
+    //endregion Module status
+
     // region Launcher Options
 
     /** Launch the configured default activity */
     private fun launchDefault() {
-        if (defaultActivityName.equals("classic", false)) { launchClassicSettings() }
-        else { Su.launchAndroidAutoActivity(defaultActivityName) }
+        if (defaultActivityName.equals(CLASSIC, ignoreCase = true)) launchClassicSettings()
+        else launchSuAndroidAutoActivity(defaultActivityName)
     }
 
-    /** Launch the Material3 or Classic Android Auto settings */
-    private fun launchAndroidAutoSettings(classic: Boolean = false) {
-        val type = if (classic) "Classic" else "Material3"
-        Log.i(logTag, "Attempting to launch AA $type settings...")
+    /** Launch the Classic Android Auto settings, does not require root */
+    private fun launchClassicSettings() {
+        updateDefaultActivityName(CLASSIC)
+        Log.i(LOG_TAG, "Attempting to launch AA Classic settings...")
+
+        val intent = Intent()
+            .setComponent(ComponentName(AA_PACKAGE, CLASSIC_SETTINGS))
+            .putExtra("com.google.android.gearhead.projection.phonescreen.SHORTCUT", true)
 
         try {
-            if (classic) launchClassicSettings() else launchMaterial3Settings()
-            Log.i(logTag, "Launched AA $type settings!")
-        } catch (ex: Throwable) {
-            Log.e(logTag, "Could not launch AA $type settings, activity not found...")
-            ex.message?.let { Log.e(logTag, it) }
-            Log.e(logTag, ex.stackTrace.contentDeepToString())
+            startActivity(intent)
+        } catch (ex: ActivityNotFoundException) {
+            Log.e(LOG_TAG, "Could not launch AA Classic settings, activity not found", ex)
+            toast(getString(R.string.launch_failed))
+        } catch (ex: SecurityException) {
+            Log.e(LOG_TAG, "Could not launch AA Classic settings, permission denied", ex)
+            toast(getString(R.string.launch_failed))
         }
     }
 
-    /** Launch the Classic Android Auto settings */
-    private fun launchClassicSettings() {
-        updateDefaultActivityName("classic")
-        val intent = Intent()
-            .setComponent(ComponentName(
-                aaPackageName,
-                "com.google.android.gearhead.vanagon.VnLaunchPadInternalActivity"))
-            .putExtra(
-                "com.google.android.gearhead.projection.phonescreen.SHORTCUT",
-                true)
-
-        startActivity(intent)
-    }
-
-    /** Launch an Android Auto activity by activity name + update the default if used */
+    /** Launch an Android Auto activity as SuperUser + update the default if used */
     private fun launchSuAndroidAutoActivity(activityName: String) {
         updateDefaultActivityName(activityName)
-        Su.launchAndroidAutoActivity(activityName)
-    }
+        Log.i(LOG_TAG, "Attempting to launch $activityName...")
 
-    /** Launch the Android Auto Material3 settings activity + update the default if used */
-    private fun launchMaterial3Settings() {
-        launchSuAndroidAutoActivity(aaPackageName + aaMaterial3Settings)
-    }
-
-    /** Launch the Android Auto Interactive Troubleshooter activity + update the default if used */
-    private fun launchInteractiveTroubleshooter() {
-        launchSuAndroidAutoActivity(
-            "com.google.android.apps.auto" +
-                    ".components.settings.interactivetroubleshooter.InteractiveTroubleshooterActivity")
-    }
-
-    /** Launch the Android Auto Troubleshooter activity + update the default if used */
-    private fun launchTroubleshooter() {
-        launchSuAndroidAutoActivity(
-            "com.google.android.apps.auto" +
-                    ".components.settings.troubleshooter.TroubleshooterActivity")
-    }
-
-    /** Launch the Android Auto Developer settings activity + update the default if used */
-    private fun launchDeveloperSettings() {
-        launchSuAndroidAutoActivity(
-            "$aaPackageName.companion.devsettings.DeveloperSettingsActivity")
-    }
-
-    /** Launch the Android Auto Engineer settings activity + update the default if used */
-    private fun launchEngineerSettings() {
-        launchSuAndroidAutoActivity(
-            "$aaPackageName.companion.settings.EngineerSettingsActivity")
-    }
-
-    /** Launch the Android Auto App Quality Tester activity + update the default if used */
-    private fun launchAppQualityTester() {
-        launchSuAndroidAutoActivity(
-            "$aaPackageName.companion.devsettings.AppQualityTesterActivity")
-    }
-
-    /** Launch the Android Auto Feedback Reports activity + update the default if used */
-    private fun launchFeedbackReports() {
-        launchSuAndroidAutoActivity(
-            "$aaPackageName.companion.feedback.FeedbackListActivity")
-    }
-
-    /** Launch the Android Auto PRIMES Events activity + update the default if used */
-    private fun launchPrimesEvents() {
-        launchSuAndroidAutoActivity(
-            "com.google.android.libraries.performance.primes.debug.PrimesEventActivity")
-    }
-
-    /** Launch the Android Auto Assistant Shortcuts activity + update the default if used */
-    private fun launchAssistantShortcuts() {
-        launchSuAndroidAutoActivity(
-            "$aaPackageName.companion.settings.AddAssistantShortcutActivity")
-    }
-
-    /** Launch the Android Auto App Launcher activity + update the default if used */
-    private fun launchAppLauncher() {
-        launchSuAndroidAutoActivity(
-            "$aaPackageName.companion.settings.LauncherAppSettingsActivity")
+        viewLifecycleOwner.lifecycleScope.launch {
+            if (!RootShell.launchAndroidAutoActivity(activityName)) {
+                Log.e(LOG_TAG, "Could not launch $activityName")
+                toast(getString(R.string.launch_failed_root))
+            }
+        }
     }
 
     // endregion Launcher Options
@@ -191,7 +186,7 @@ class LaunchOptionsFragment : Fragment() {
     /** Toggle the use default launch option setting */
     private fun toggleUseDefault() {
         useDefault = !useDefault
-        settings.edit().putBoolean("use_default", useDefault).apply()
+        settings.edit { putBoolean("use_default", useDefault) }
         binding.checkboxDefault.isChecked = useDefault
 
         // Clear the default activity name if not using a default launch option
@@ -201,8 +196,35 @@ class LaunchOptionsFragment : Fragment() {
     /** Update the default activity name, clear if not using a default */
     private fun updateDefaultActivityName(activityName: String = "") {
         defaultActivityName = if (useDefault) activityName else ""
-        settings.edit().putString("default_activity_name", defaultActivityName).apply()
+        settings.edit { putString("default_activity_name", defaultActivityName) }
+    }
+
+    private fun toast(message: String) {
+        context?.let { Toast.makeText(it, message, Toast.LENGTH_LONG).show() }
     }
 
     //endregion Helpers
+
+    private companion object {
+        const val LOG_TAG = "AndroidAuto-LauncherUnlocked"
+        const val CLASSIC = "classic"
+
+        // Known Android Auto activities
+        const val CLASSIC_SETTINGS =
+            "com.google.android.gearhead.vanagon.VnLaunchPadInternalActivity"
+        const val MATERIAL3_SETTINGS =
+            "$AA_PACKAGE.companion.settings.Material3SettingsActivity"
+        const val INTERACTIVE_TROUBLESHOOTER = "com.google.android.apps.auto" +
+                ".components.settings.interactivetroubleshooter.InteractiveTroubleshooterActivity"
+        const val TROUBLESHOOTER =
+            "com.google.android.apps.auto.components.settings.troubleshooter.TroubleshooterActivity"
+        const val DEVELOPER_SETTINGS = "$AA_PACKAGE.companion.devsettings.DeveloperSettingsActivity"
+        const val ENGINEER_SETTINGS = "$AA_PACKAGE.companion.settings.EngineerSettingsActivity"
+        const val APP_QUALITY_TESTER = "$AA_PACKAGE.companion.devsettings.AppQualityTesterActivity"
+        const val FEEDBACK_REPORTS = "$AA_PACKAGE.companion.feedback.FeedbackListActivity"
+        const val PRIMES_EVENTS =
+            "com.google.android.libraries.performance.primes.debug.PrimesEventActivity"
+        const val ASSISTANT_SHORTCUT = "$AA_PACKAGE.companion.settings.AddAssistantShortcutActivity"
+        const val APP_LAUNCHER = "$AA_PACKAGE.companion.settings.LauncherAppSettingsActivity"
+    }
 }
