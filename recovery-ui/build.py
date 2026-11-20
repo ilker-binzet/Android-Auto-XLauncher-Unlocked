@@ -15,7 +15,9 @@ ORIGINAL_HASH = "2a23d82f71490ecdb41ab9d6671a2bebe1fd354b04e7207eb2c88532b057c13
 ORIGINAL_NAME = "Car-App-Hub-3.1.1-preview-debug.apk"
 PACKAGE = "com/google/android/projection/gearhead/xunlocked"
 GRID = f"L{PACKAGE}/recovery/CarMenuGrid;"
+VIEWPORT = f"L{PACKAGE}/recovery/ProjectionViewport;"
 ACTIVITY = f"L{PACKAGE}/projection/CarMirrorActivity;"
+CAPTURE = f"L{PACKAGE}/projection/ProjectionCaptureService;"
 STRINGS = f"L{PACKAGE}/R$string;"
 FOLDER = Path(__file__).resolve().parent
 
@@ -37,7 +39,7 @@ def replace_once(text, old, new):
 def patch_activity(activity):
     original = activity.read_text()
     # Preserve the original visibility and item click calls while changing the
-    # apps field to the native GridView subclass. No input or capture code is added.
+    # apps field to the native GridView subclass.
     updated = original.replace("Landroid/widget/ListView;", GRID)
     updated = replace_once(updated,
         f"    invoke-virtual {{v10, v9}}, {GRID}->setDividerHeight(I)V\n", "")
@@ -57,18 +59,64 @@ def patch_activity(activity):
         f"    invoke-static {{v0, v3}}, {GRID}->wrap(Landroid/widget/LinearLayout;I)Landroid/view/View;\n\n"
         "    move-result-object v3\n\n"
         f"    invoke-virtual {{p0, v3}}, {ACTIVITY}->setContentView(Landroid/view/View;)V")
-    # A pinned input digest secures the binary assumptions. This check catches
-    # accidental changes to any methods outside the two presentation entry points.
+    updated = patch_viewport(updated)
+    # Catch changes outside presentation and its viewport/touch boundary.
     method = re.compile(r"^\.method[^\n]+\n.*?^\.end method$", re.M | re.S)
     old_methods = {m.splitlines()[0]: m for m in method.findall(original)}
     new_methods = {m.splitlines()[0]: m for m in method.findall(updated)}
     if old_methods.keys() != new_methods.keys():
         raise ValueError("Activity method signatures changed")
+    viewport_methods = {"showApps()V", "onCreate(Landroid/os/Bundle;)V", "resizeSurface()V",
+                        "surfaceChanged(Landroid/view/SurfaceHolder;III)V"}
     for name, body in old_methods.items():
-        if " showApps()V" not in name and " onCreate(Landroid/os/Bundle;)V" not in name:
+        if name.split()[-1] not in viewport_methods and " surfaceCreated$lambda$22(" not in name:
             if body != new_methods[name].replace(GRID, "Landroid/widget/ListView;"):
                 raise ValueError(f"Unexpected change in {name}")
     activity.write_text(updated)
+
+
+def patch_viewport(activity):
+    # The existing service supplies the actual phone dimensions. Keep that service,
+    # the current SurfaceHolder callbacks and the resume/vehicle checks in place.
+    resize = re.compile(r"^\.method private final resizeSurface\(\)V\n.*?^\.end method$", re.M | re.S)
+    match = resize.search(activity)
+    if match is None:
+        raise ValueError("Could not locate the original resizeSurface method")
+    updated = replace_once(activity, match.group(), f""".method private final resizeSurface()V
+    .locals 2
+
+    sget-object v0, {CAPTURE}->Companion:L{PACKAGE}/projection/ProjectionCaptureService$Companion;
+    invoke-virtual {{v0}}, L{PACKAGE}/projection/ProjectionCaptureService$Companion;->getActive(){CAPTURE}
+    move-result-object v0
+    if-eqz v0, :done
+
+    invoke-virtual {{v0}}, {CAPTURE}->phoneSize()Landroid/graphics/Point;
+    move-result-object v0
+    iget-object v1, p0, {ACTIVITY}->surface:Landroid/view/SurfaceView;
+    if-eqz v1, :done
+    invoke-static {{v1, v0}}, {VIEWPORT}->resize(Landroid/view/SurfaceView;Landroid/graphics/Point;)V
+
+    :done
+    return-void
+.end method""")
+    updated = replace_once(updated,
+        f"    .line 207\n    invoke-direct {{p0}}, {ACTIVITY}->connectSurface()V",
+        f"    .line 207\n    invoke-direct {{p0}}, {ACTIVITY}->connectSurface()V\n\n"
+        f"    iget-object v0, p0, {ACTIVITY}->surface:Landroid/view/SurfaceView;\n"
+        f"    invoke-static {{v0, p3, p4}}, {VIEWPORT}->surfaceSized(Landroid/view/SurfaceView;II)V")
+    return replace_once(updated,
+        "    .line 191\n    :cond_0\n    invoke-virtual {p2}, Landroid/view/MotionEvent;->getActionMasked()I",
+        f"""    .line 191
+    :cond_0
+    iget-object v2, p0, {ACTIVITY}->surface:Landroid/view/SurfaceView;
+    invoke-static {{v2, p2}}, {VIEWPORT}->accepts(Landroid/view/View;Landroid/view/MotionEvent;)Z
+    move-result p1
+    if-nez p1, :viewport_accepts
+    iput-boolean v0, p0, {ACTIVITY}->touching:Z
+    return v0
+
+    :viewport_accepts
+    invoke-virtual {{p2}}, Landroid/view/MotionEvent;->getActionMasked()I""")
 
 
 def original_apk(input_path):

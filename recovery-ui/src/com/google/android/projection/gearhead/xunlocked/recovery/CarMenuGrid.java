@@ -13,6 +13,7 @@ import android.graphics.drawable.StateListDrawable;
 import android.text.TextUtils;
 import android.util.LruCache;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AbsListView;
@@ -181,6 +182,12 @@ public final class CarMenuGrid extends GridView {
         private final LinearLayout controls;
         private final FrameLayout content;
         private final CarMenuGrid grid;
+        private final ProjectionViewport viewport;
+        private final Button display;
+        private final Button end;
+        private final Palette palette;
+        private final boolean turkish;
+        private FrameLayout displayOptions;
         private final String ready;
         private final CharSequence menuLabel;
         private final CharSequence endLabel;
@@ -191,14 +198,21 @@ public final class CarMenuGrid extends GridView {
         Shell(LinearLayout original, int readyText) {
             super(original.getContext());
             context = getContext();
-            Palette palette = new Palette(context);
+            palette = new Palette(context);
+            turkish = "tr".equals(context.getResources().getConfiguration().getLocales().get(0).getLanguage());
             status = (TextView) original.getChildAt(0);
             controls = (LinearLayout) original.getChildAt(1);
             content = (FrameLayout) original.getChildAt(2);
             grid = (CarMenuGrid) content.getChildAt(1);
+            viewport = new ProjectionViewport(content);
             ready = context.getString(readyText);
             menuLabel = ((Button) controls.getChildAt(0)).getText();
-            endLabel = ((Button) controls.getChildAt(3)).getText();
+            end = (Button) controls.getChildAt(3);
+            endLabel = end.getText();
+            display = new Button(context);
+            display.setText(turkish ? "Görüntü" : "Display");
+            display.setOnClickListener(this::showDisplayOptions);
+            controls.addView(display, 3);
             original.removeAllViews();
             setBackgroundColor(palette.canvas);
             header = new LinearLayout(context);
@@ -246,8 +260,9 @@ public final class CarMenuGrid extends GridView {
                 button.setBackground(feedback(context, palette));
             }
             addView(header);
-            addView(controls);
             addView(content);
+            // The opaque controls are drawn after the projected content.
+            addView(controls);
         }
 
         @Override protected void onMeasure(int widthSpec, int heightSpec) {
@@ -256,6 +271,7 @@ public final class CarMenuGrid extends GridView {
             boolean contentOpened = grid.getVisibility() != VISIBLE;
             boolean sideRail = contentOpened && width >= dp(context, 660) && height >= dp(context, 336);
             if (!arranged || showingContent != contentOpened || rail != sideRail) {
+                closeDisplayOptions(false);
                 arranged = true;
                 showingContent = contentOpened;
                 rail = sideRail;
@@ -276,24 +292,93 @@ public final class CarMenuGrid extends GridView {
             controls.measure(exactly(rail ? bar : width), exactly(rail ? height : Math.min(bar, height)));
             content.measure(exactly(rail ? Math.max(0, width - bar) : width),
                     exactly(rail ? height : Math.max(0, height - headerHeight - controls.getMeasuredHeight())));
+            if (displayOptions != null) displayOptions.measure(exactly(width), exactly(height));
             setMeasuredDimension(width, height);
         }
 
         private void arrangeControls() {
             controls.setOrientation(rail ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
             controls.setGravity(rail ? Gravity.TOP : Gravity.CENTER_VERTICAL);
-            boolean turkish = "tr".equals(context.getResources().getConfiguration().getLocales().get(0).getLanguage());
             for (int i = 0; i < controls.getChildCount(); i++) {
                 Button button = (Button) controls.getChildAt(i);
-                button.setVisibility((showingContent ? i != 2 : i >= 2) ? VISIBLE : GONE);
+                boolean visible = showingContent ? i != 2 : i == 2 || button == end;
+                button.setVisibility(visible ? VISIBLE : GONE);
                 button.setLayoutParams(rail ? new LinearLayout.LayoutParams(-1, dp(context, 80))
                         : new LinearLayout.LayoutParams(0, -1, 1));
             }
             Button menu = (Button) controls.getChildAt(0);
             menu.setText(showingContent ? (turkish ? "Menü" : "Menu") : menuLabel);
-            Button end = (Button) controls.getChildAt(3);
             end.setContentDescription(endLabel);
             end.setText(rail ? (turkish ? "Bitir" : "Stop") : endLabel);
+        }
+
+        private void showDisplayOptions(View anchor) {
+            if (!showingContent || !viewport.hasSource()) return;
+            if (displayOptions != null) return;
+            FrameLayout overlay = new FrameLayout(context);
+            overlay.setBackgroundColor(0xB0080D10);
+            overlay.setOnClickListener(view -> closeDisplayOptions(true));
+            LinearLayout options = new LinearLayout(context);
+            options.setOrientation(LinearLayout.VERTICAL);
+            options.setPadding(dp(context, 12), dp(context, 12), dp(context, 12), dp(context, 12));
+            options.setClickable(true);
+            options.setBackground(shape(context, palette.surface, palette.accent));
+            int width = Math.max(1, Math.min(dp(context, 340), getWidth() - dp(context, 24)));
+            overlay.addView(options, new FrameLayout.LayoutParams(width, -2, Gravity.CENTER));
+            boolean canFill = viewport.canFill();
+            Button fit = addDisplayChoice(options, false, turkish ? "Sığdır" : "Fit",
+                    turkish ? "Görüntünün tamamı" : "Show the entire picture", true);
+            Button fill = addDisplayChoice(options, true, turkish ? "Doldur" : "Fill",
+                    canFill ? (turkish ? "Kenarlar kırpılabilir" : "Edges may be cropped")
+                            : (turkish ? "Bu boyutta kullanılamıyor" : "Unavailable at this size"), canFill);
+            displayOptions = overlay;
+            controls.setDescendantFocusability(FOCUS_BLOCK_DESCENDANTS);
+            content.setDescendantFocusability(FOCUS_BLOCK_DESCENDANTS);
+            controls.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+            content.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+            addView(overlay);
+            (canFill && viewport.fillRequested() ? fill : fit).requestFocus();
+        }
+
+        private Button addDisplayChoice(LinearLayout options, boolean fill, String title,
+                                        String detail, boolean enabled) {
+            Button choice = new Button(context);
+            boolean selected = fill == (viewport.canFill() && viewport.fillRequested());
+            choice.setAllCaps(false);
+            choice.setText(title + "\n" + detail);
+            choice.setSelected(selected);
+            choice.setEnabled(enabled);
+            choice.setTextColor(enabled ? palette.text : palette.muted);
+            choice.setTextSize(18);
+            choice.setMinHeight(dp(context, 76));
+            choice.setBackground(feedback(context, palette));
+            choice.setOnClickListener(view -> {
+                viewport.select(fill);
+                closeDisplayOptions(true);
+            });
+            choice.setOnKeyListener((view, code, event) -> {
+                if (code != KeyEvent.KEYCODE_BACK && code != KeyEvent.KEYCODE_ESCAPE) return false;
+                if (event.getAction() == KeyEvent.ACTION_UP) closeDisplayOptions(true);
+                return true;
+            });
+            options.addView(choice, new LinearLayout.LayoutParams(-1, -2));
+            return choice;
+        }
+
+        private void closeDisplayOptions(boolean restoreFocus) {
+            if (displayOptions == null) return;
+            removeView(displayOptions);
+            displayOptions = null;
+            controls.setDescendantFocusability(FOCUS_BEFORE_DESCENDANTS);
+            content.setDescendantFocusability(FOCUS_BEFORE_DESCENDANTS);
+            controls.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_AUTO);
+            content.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_AUTO);
+            if (restoreFocus) display.requestFocus();
+        }
+
+        @Override protected void onDetachedFromWindow() {
+            closeDisplayOptions(false);
+            super.onDetachedFromWindow();
         }
 
         @Override protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
@@ -310,6 +395,7 @@ public final class CarMenuGrid extends GridView {
                 content.layout(0, headerBottom, width, Math.max(headerBottom, barTop));
                 controls.layout(0, barTop, width, height);
             }
+            if (displayOptions != null) displayOptions.layout(0, 0, width, height);
         }
 
         private static int exactly(int size) {

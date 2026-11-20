@@ -8,12 +8,20 @@ The native grid uses the existing selected apps, with icons loaded from the
 phone and a default icon when needed. The interface uses the Android light or
 dark configuration. The content screen moves Menu, Back and Stop to a side rail
 on wide screens and a bottom row on short screens. The original activity handles
-launch callbacks, capture, input coordinates and driving restriction state.
+launch callbacks, capture and driving restriction state. Its input mapping uses
+the resized surface and rejects gestures that began before a size change or end
+outside the visible projection area.
 
-The browser design is in `design/car-ui-preview/`. The recovery build includes
-the app grid and content controls. Recent apps, appearance and Fit/Fill settings
-remain designs in the browser preview. Isolated app capture and video performance
-remain separate work requiring device verification.
+The **Display** button is available during projection. **Fit** shows the whole
+image. **Fill** covers the available content area and may crop the edges. It
+falls back to Fit when the requested buffer would exceed 4096 pixels on either
+axis or 4 Mi pixels in area. Portrait and landscape selections are independent
+for the lifetime of the car screen. The viewport follows the phone's reported
+orientation. Video player chrome drawn by the phone stays part of the image.
+
+The browser design is in `design/car-ui-preview/`. Recent apps and the appearance
+dialog remain in the browser preview. Isolated app capture and video performance
+require separate work.
 
 ## Build
 
@@ -29,10 +37,13 @@ python3 recovery-ui/build.py \
 
 Set `--jdk-bin` if Java and Javac are outside `PATH`. The build verifies the
 baseline APK hash. It compiles the native menu and checks that the recovered
-activity changes only at the two presentation entry points, plus the grid
-type used for existing visibility calls. The build compares all untouched
+activity changes only in presentation and its viewport/touch methods. It compares all untouched
 original APK files, including the manifest, Android resources and Xposed
 configuration, and checks the final ZIP alignment.
+
+Run `ViewportSizeCheck` as a plain JVM main with `ViewportSize.java` to check
+portrait and landscape scaling, the fill limit and touch clipping. The tests
+cover geometry. DHU or vehicle testing is needed for surface composition.
 
 A test package signed with a new key requires a device without the previous
 installation. Android requires the original signer for an in-place update.
