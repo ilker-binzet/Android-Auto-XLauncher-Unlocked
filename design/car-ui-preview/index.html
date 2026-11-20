@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="tr" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Car App Hub · Araç arayüzü önizlemesi</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <aside class="review-bar" aria-label="Önizleme bilgisi">
+    <span>Car App Hub <span class="review-separator">/</span> Araç arayüzü önizlemesi</span>
+    <span>Örnek uygulamalar · Android bağlantısı yok</span>
+  </aside>
+  <main id="car" aria-label="Car App Hub araç ekranı">
+    <section id="launcher" class="screen">
+      <header class="menu-header">
+        <div class="identity"><svg class="brand-mark" aria-hidden="true"><use href="#wheel"/></svg><span>Car App Hub</span></div>
+        <button id="appearance" class="icon-button" aria-label="Görünüm ayarları"><svg aria-hidden="true"><use href="#sun"/></svg></button>
+      </header>
+      <div class="menu-heading">
+        <h1>Uygulamalar</h1>
+        <div class="tabs" role="group" aria-label="Uygulama filtresi">
+          <button id="all-apps" aria-pressed="true">Tümü</button>
+          <button id="recent-apps" aria-pressed="false">Son açılan</button>
+        </div>
+      </div>
+      <div id="app-grid" class="app-grid" aria-label="Uygulamalar"></div>
+      <div id="empty" class="empty" hidden>
+        <svg aria-hidden="true"><use href="#apps"/></svg><h2>Henüz uygulama açılmadı</h2>
+        <p>Açtığınız uygulamalar burada görünür.</p>
+        <button id="show-all" class="primary">Uygulamalara dön</button>
+      </div>
+      <footer class="menu-footer">
+        <button class="quiet-button end-sharing" aria-label="Paylaşımı bitir"><svg aria-hidden="true"><use href="#stop"/></svg><span>Paylaşımı bitir</span></button>
+        <nav id="pagination" aria-label="Uygulama sayfaları">
+          <button id="previous" class="icon-button" aria-label="Önceki sayfa"><svg aria-hidden="true"><use href="#left"/></svg></button>
+          <span id="page-label" role="status" aria-live="polite"></span>
+          <button id="next" class="icon-button" aria-label="Sonraki sayfa"><svg aria-hidden="true"><use href="#right"/></svg></button>
+        </nav>
+      </footer>
+    </section>
+    <section id="content" class="screen content-screen" hidden aria-label="Açık uygulama">
+      <nav class="control-rail" aria-label="Uygulama kontrolleri">
+        <button id="open-menu" class="rail-button"><svg aria-hidden="true"><use href="#apps"/></svg><span>Menü</span></button>
+        <button id="back" class="rail-button"><svg aria-hidden="true"><use href="#left"/></svg><span>Geri</span></button>
+        <div class="rail-space"></div>
+        <button id="fit-control" class="rail-button"><svg aria-hidden="true"><use href="#fit"/></svg><span>Görüntü</span></button>
+        <button class="rail-button end-sharing" aria-label="Paylaşımı bitir"><svg aria-hidden="true"><use href="#stop"/></svg><span>Bitir</span></button>
+      </nav>
+      <div class="content-area" id="content-area">
+        <div id="sample-content" class="sample-content">
+          <div class="sample-header"><span id="sample-title"></span><span class="sample-tag">Örnek içerik</span></div>
+          <div class="sample-center"><div id="sample-icon"></div><h1 id="selected-title"></h1><p>Uygulama içerik alanı</p></div>
+          <div class="sample-bottom"><svg aria-hidden="true"><use href="#play"/></svg><div></div><span>Önizleme</span></div>
+        </div>
+      </div>
+    </section>
+    <section id="ended" class="screen ended-screen" hidden>
+      <svg class="ended-icon" aria-hidden="true"><use href="#stop"/></svg>
+      <h1>Paylaşım kapalı</h1><p>Uygulamalarınıza dönmek için yeniden başlatın.</p>
+      <button id="restart" class="primary">Yeniden başlat</button>
+    </section>
+    <dialog id="appearance-dialog" aria-labelledby="appearance-title">
+      <div class="dialog-heading"><h2 id="appearance-title">Görünüm</h2><button class="icon-button close-dialog" aria-label="Görünüm ayarlarını kapat"><svg aria-hidden="true"><use href="#close"/></svg></button></div>
+      <p>Ekran temasını seçin.</p>
+      <div class="theme-options" role="group" aria-label="Tema">
+        <button data-theme-choice="dark"><svg aria-hidden="true"><use href="#moon"/></svg><span>Koyu</span></button>
+        <button data-theme-choice="light"><svg aria-hidden="true"><use href="#sun"/></svg><span>Açık</span></button>
+        <button data-theme-choice="system"><svg aria-hidden="true"><use href="#screen"/></svg><span>Sistem</span></button>
+      </div>
+    </dialog>
+    <dialog id="fit-dialog" aria-labelledby="fit-title">
+      <div class="dialog-heading"><h2 id="fit-title">Görüntü boyutu</h2><button class="icon-button close-dialog" aria-label="Görüntü boyutu ayarlarını kapat"><svg aria-hidden="true"><use href="#close"/></svg></button></div>
+      <div class="fit-options">
+        <button data-fit="fit"><svg aria-hidden="true"><use href="#fit"/></svg><span><strong>Sığdır</strong><small>Görüntünün tamamını gösterir.</small></span></button>
+        <button data-fit="fill"><svg aria-hidden="true"><use href="#fill"/></svg><span><strong>Doldur</strong><small>Alanı doldurur; kenarlar kesilebilir.</small></span></button>
+      </div>
+    </dialog>
+    <dialog id="stop-dialog" aria-labelledby="stop-title">
+      <h2 id="stop-title">Paylaşım bitirilsin mi?</h2><p>Uygulama görüntüsü araç ekranından kaldırılır.</p>
+      <div class="dialog-actions"><button id="cancel-stop" class="secondary">Vazgeç</button><button id="confirm-stop" class="primary">Paylaşımı bitir</button></div>
+    </dialog>
+  </main>
+  <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="apps" viewBox="0 0 32 32"><rect x="4" y="4" width="9" height="9" rx="2"/><rect x="19" y="4" width="9" height="9" rx="2"/><rect x="4" y="19" width="9" height="9" rx="2"/><rect x="19" y="19" width="9" height="9" rx="2"/></symbol>
+    <symbol id="left" viewBox="0 0 32 32"><path d="M19 6 9 16l10 10M10 16h18"/></symbol>
+    <symbol id="right" viewBox="0 0 32 32"><path d="m13 6 10 10-10 10M22 16H4"/></symbol>
+    <symbol id="close" viewBox="0 0 32 32"><path d="m8 8 16 16M24 8 8 24"/></symbol>
+    <symbol id="stop" viewBox="0 0 32 32"><rect x="7" y="7" width="18" height="18" rx="4"/></symbol>
+    <symbol id="sun" viewBox="0 0 32 32"><circle cx="16" cy="16" r="6"/><path d="M16 2v3m0 22v3M2 16h3m22 0h3M6 6l2 2m16 16 2 2M6 26l2-2M24 8l2-2"/></symbol>
+    <symbol id="moon" viewBox="0 0 32 32"><path d="M25 22A12 12 0 0 1 10 6a12 12 0 1 0 15 16Z"/></symbol>
+    <symbol id="screen" viewBox="0 0 32 32"><rect x="3" y="5" width="26" height="19" rx="3"/><path d="M11 29h10m-5-5v5"/></symbol>
+    <symbol id="fit" viewBox="0 0 32 32"><path d="M11 4H4v7m17-7h7v7M4 21v7h7m17-7v7h-7"/><rect x="9" y="11" width="14" height="10" rx="1"/></symbol>
+    <symbol id="fill" viewBox="0 0 32 32"><path d="M4 11V4h7m10 0h7v7M4 21v7h7m17-7v7h-7M9 9l14 14M9 23 23 9"/></symbol>
+    <symbol id="play" viewBox="0 0 32 32"><path d="m11 6 16 10-16 10Z"/></symbol>
+    <symbol id="folder" viewBox="0 0 32 32"><path d="M3 10V6h10l3 4h13v17H3Z"/><path d="M3 14h26"/></symbol>
+    <symbol id="radio" viewBox="0 0 32 32"><rect x="3" y="10" width="26" height="18" rx="4"/><path d="m8 10 17-7M8 16h15"/><circle cx="10" cy="22" r="2"/><path d="M19 21h5m-5 4h5"/></symbol>
+    <symbol id="wheel" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17"/><path d="M4 18h9m14 0h9M20 28v9"/><rect x="12" y="12" width="9" height="9" rx="2" transform="rotate(-16 16 16)"/><rect x="22" y="13" width="8" height="9" rx="2" transform="rotate(14 26 17)"/><rect x="17" y="21" width="9" height="9" rx="2"/><path d="m20 23 4 2-4 2Z"/></symbol>
+  </svg>
+  <script src="app.js"></script>
+</body>
+</html>
